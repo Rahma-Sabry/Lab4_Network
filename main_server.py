@@ -1,3 +1,3 @@
-from httpserver.http_client import run_client
+from httpserver.http_server import run_server
 
-run_client()
+run_server()

@@ -1,7 +1,9 @@
 import json
 
-def checksum(data):
-    return sum(bytearray(data.encode())) % 256
+
+def compute_checksum(seq, ack, flags, data):
+    content = f"{seq}|{ack}|{'-'.join(flags)}|{data}"
+    return sum(content.encode()) % 256
 
 
 def create_packet(seq, ack, flags, data):
@@ -11,13 +13,19 @@ def create_packet(seq, ack, flags, data):
         "flags": flags,
         "data": data,
     }
-    packet["checksum"] = checksum(data)
+    packet["checksum"] = compute_checksum(seq, ack, flags, data)
     return json.dumps(packet).encode()
 
 
-def parse_packet(data):
-    return json.loads(data.decode())
+def parse_packet(raw_data):
+    return json.loads(raw_data.decode())
 
 
 def is_valid(packet):
-    return packet["checksum"] == checksum(packet["data"])
+    expected = compute_checksum(
+        packet["seq"],
+        packet["ack"],
+        packet["flags"],
+        packet["data"],
+    )
+    return packet["checksum"] == expected
