@@ -3,7 +3,7 @@ import random
 import json
 from transport.packet import create_packet, parse_packet, is_valid
 
-LOSS_RATE = 0.0
+LOSS_RATE = 0.3
 CORRUPT_RATE = 0.0
 TIMEOUT = 2
 BUFFER_SIZE = 65535
@@ -41,11 +41,12 @@ class ReliableUDP:
             return json.dumps(packet).encode()
         return packet_bytes
 
-    def _send_raw(self, packet_bytes, destination):
-        if self._simulate_loss():
+    def _send_raw(self, packet_bytes, destination, simulate=True):
+        if simulate and self._simulate_loss():
             print("Simulating packet loss")
             return
-        packet_bytes = self._maybe_corrupt_bytes(packet_bytes)
+        if simulate:
+            packet_bytes = self._maybe_corrupt_bytes(packet_bytes)
         self.sock.sendto(packet_bytes, destination)
 
     def _peer_addr(self):
