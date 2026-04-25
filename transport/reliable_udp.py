@@ -3,7 +3,7 @@ import random
 import json
 from transport.packet import create_packet, parse_packet, is_valid
 
-LOSS_RATE = 0.3
+LOSS_RATE = 0.0
 CORRUPT_RATE = 0.0
 TIMEOUT = 2
 BUFFER_SIZE = 65535
@@ -42,11 +42,17 @@ class ReliableUDP:
         return packet_bytes
 
     def _send_raw(self, packet_bytes, destination, simulate=True):
-        if simulate and self._simulate_loss():
+        packet = parse_packet(packet_bytes)
+
+        should_simulate = simulate and ("DATA" in packet["flags"])
+
+        if should_simulate and self._simulate_loss():
             print("Simulating packet loss")
             return
-        if simulate:
+
+        if should_simulate:
             packet_bytes = self._maybe_corrupt_bytes(packet_bytes)
+
         self.sock.sendto(packet_bytes, destination)
 
     def _peer_addr(self):
@@ -60,7 +66,7 @@ class ReliableUDP:
         print("Client: Sending SYN")
 
         while True:
-            self._send_raw(syn, self.addr)
+            self._send_raw(syn, self.addr, simulate=False)
             try:
                 data, _ = self.sock.recvfrom(BUFFER_SIZE)
                 packet = parse_packet(data)
@@ -72,7 +78,7 @@ class ReliableUDP:
                 if "SYN-ACK" in packet["flags"]:
                     print("Client: Received SYN-ACK")
                     ack = create_packet(self.seq, packet["seq"], ["ACK"], "")
-                    self._send_raw(ack, self.addr)
+                    self._send_raw(ack, self.addr, simulate=False)
                     print("Client: Connection established")
                     return
             except socket.timeout:
@@ -97,7 +103,7 @@ class ReliableUDP:
                 print("Server: Received SYN")
                 self.client_addr = addr
                 syn_ack = create_packet(0, packet["seq"], ["SYN-ACK"], "")
-                self._send_raw(syn_ack, addr)
+                self._send_raw(syn_ack, addr, simulate=False)
 
                 while True:
                     try:
@@ -113,7 +119,7 @@ class ReliableUDP:
                             return
                     except socket.timeout:
                         print("Server: Timeout waiting for ACK, resending SYN-ACK")
-                        self._send_raw(syn_ack, addr)
+                        self._send_raw(syn_ack, addr, simulate=False)
 
     # -------------------------
     # Reliable send (Stop-and-Wait)
@@ -146,7 +152,12 @@ class ReliableUDP:
     # -------------------------
     def receive(self):
         while True:
-            data, addr = self.sock.recvfrom(BUFFER_SIZE)
+            try:
+                data, addr = self.sock.recvfrom(BUFFER_SIZE)
+            except socket.timeout:
+                print("Receive timeout, still waiting...")
+                continue
+
             packet = parse_packet(data)
 
             if not is_valid(packet):
@@ -177,7 +188,7 @@ class ReliableUDP:
         destination = self._peer_addr()
 
         while True:
-            self._send_raw(fin, destination)
+            self._send_raw(fin, destination, simulate=False)
             print("Client: Sent FIN")
             try:
                 data, _ = self.sock.recvfrom(BUFFER_SIZE)
@@ -204,7 +215,7 @@ class ReliableUDP:
             if "FIN" in packet["flags"]:
                 print("Server: Received FIN")
                 ack = create_packet(0, packet["seq"], ["ACK"], "")
-                self._send_raw(ack, addr)
+                self._send_raw(ack, addr, simulate=False)
                 self.sock.close()
                 print("Server: Connection closed")
                 return
