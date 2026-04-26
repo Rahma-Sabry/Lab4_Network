@@ -205,17 +205,29 @@ class ReliableUDP:
                 print("Client: Timeout waiting for FIN-ACK, resending FIN")
 
     def close_server(self):
-        while True:
-            data, addr = self.sock.recvfrom(BUFFER_SIZE)
-            packet = parse_packet(data)
+        self.sock.settimeout(TIMEOUT)
+        attempts = 0
+        max_attempts = 5
 
-            if not is_valid(packet):
-                continue
+        while attempts < max_attempts:
+            try:
+                data, addr = self.sock.recvfrom(BUFFER_SIZE)
+                packet = parse_packet(data)
 
-            if "FIN" in packet["flags"]:
-                print("Server: Received FIN")
-                ack = create_packet(0, packet["seq"], ["ACK"], "")
-                self._send_raw(ack, addr, simulate=False)
-                self.sock.close()
-                print("Server: Connection closed")
-                return
+                if not is_valid(packet):
+                    continue
+
+                if "FIN" in packet["flags"]:
+                    print("Server: Received FIN")
+                    ack = create_packet(0, packet["seq"], ["ACK"], "")
+                    self._send_raw(ack, addr, simulate=False)
+                    self.sock.close()
+                    print("Server: Connection closed")
+                    return
+
+            except socket.timeout:
+                attempts += 1
+                print(f"Server: Timeout waiting for FIN ({attempts}/{max_attempts})")
+
+        print("Server: No FIN received, closing socket anyway.")
+        self.sock.close()

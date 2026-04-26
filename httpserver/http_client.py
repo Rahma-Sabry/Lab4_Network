@@ -3,7 +3,7 @@ from .http_protocol import build_get, build_post
 
 
 def run_client():
-    client = ReliableUDP("127.0.0.1", 5000)
+    client = ReliableUDP("127.0.0.1", 8080)
     client.handshake_client()
 
     choice = input("Enter method (GET/POST): ").strip().upper()
